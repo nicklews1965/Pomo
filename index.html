@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pomo" />
+  <meta name="description" content="Pomo — A beautiful focus timer to boost your productivity. Stay focused with Pomodoro technique." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <!-- iOS icons -->
+  <link rel="apple-touch-icon" href="icons/ios/icon-180.png" />
+  <link rel="apple-touch-icon" sizes="120x120" href="icons/ios/icon-120.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/ios/icon-152.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/ios/icon-167.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/ios/icon-180.png" />
+  <!-- iOS splash screens -->
+  <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1290x2796.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1179x2556.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1170x2532.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1125x2436.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1242x2688.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)" href="ios-assets/splash/splash-1242x2208.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)" href="ios-assets/splash/splash-1536x2048.png" />
+  <title>Pomo — Focus Timer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+    body { background: #1a1a2e; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+      50% { opacity: 0.6; }
+      100% { opacity: 0; transform: translateY(-100px) scale(1.2); }
+    }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes celebrate {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    /* Prevent pull-to-refresh on mobile */
+    body { overscroll-behavior-y: contain; }
+    /* Safe area for notched phones */
+    .app-container { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    button { -webkit-user-select: none; user-select: none; }
+    button:active { transform: scale(0.95) !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    const MODES = {
+      work: { label: "Focus", duration: 25 * 60, color: "#FF6B6B", gradient: "linear-gradient(135deg, #FF6B6B, #FF8E53)" },
+      shortBreak: { label: "Short Break", duration: 5 * 60, color: "#4ECDC4", gradient: "linear-gradient(135deg, #4ECDC4, #45B7AA)" },
+      longBreak: { label: "Long Break", duration: 15 * 60, color: "#6C5CE7", gradient: "linear-gradient(135deg, #6C5CE7, #A29BFE)" },
+    };
+
+    const QUOTES = [
+      "Stay focused. You've got this.",
+      "One session at a time.",
+      "Deep work, deep results.",
+      "Progress, not perfection.",
+      "Your future self will thank you.",
+      "Small steps, big wins.",
+      "Focus is a superpower.",
+      "You're building momentum.",
+    ];
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+      const s = (seconds % 60).toString().padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    function CircleProgress({ progress, color, size = 260, strokeWidth = 10 }) {
+      const radius = (size - strokeWidth) / 2;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference * (1 - progress);
+      return (
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)", filter: `drop-shadow(0 0 20px ${color}44)` }}>
+          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} />
+          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+            strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.5s ease, stroke 0.5s ease" }} />
+        </svg>
+      );
+    }
+
+    function Particle({ delay, color }) {
+      const style = {
+        position: "absolute", width: 6 + Math.random() * 6, height: 6 + Math.random() * 6,
+        borderRadius: "50%", background: color, opacity: 0,
+        left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`,
+        animation: `floatUp 3s ${delay}s ease-in-out infinite`,
+      };
+      return <div style={style} />;
+    }
+
+    function App() {
+      const [mode, setMode] = useState("work");
+      const [timeLeft, setTimeLeft] = useState(MODES.work.duration);
+      const [isRunning, setIsRunning] = useState(false);
+      const [sessions, setSessions] = useState(0);
+      const [totalFocus, setTotalFocus] = useState(0);
+      const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
+      const [showComplete, setShowComplete] = useState(false);
+      const [showSettings, setShowSettings] = useState(false);
+      const [customDurations, setCustomDurations] = useState({ work: 25, shortBreak: 5, longBreak: 15 });
+      const intervalRef = useRef(null);
+      const audioCtxRef = useRef(null);
+      const wakeLockRef = useRef(null);
+
+      const currentMode = MODES[mode];
+      const duration = customDurations[mode] * 60;
+      const progress = timeLeft / duration;
+
+      // Wake Lock — keeps screen on while timer runs (Android)
+      useEffect(() => {
+        async function toggleWakeLock() {
+          try {
+            if (isRunning && "wakeLock" in navigator) {
+              wakeLockRef.current = await navigator.wakeLock.request("screen");
+            } else if (wakeLockRef.current) {
+              await wakeLockRef.current.release();
+              wakeLockRef.current = null;
+            }
+          } catch (e) {}
+        }
+        toggleWakeLock();
+        return () => { if (wakeLockRef.current) wakeLockRef.current.release().catch(() => {}); };
+      }, [isRunning]);
+
+      const playSound = useCallback(() => {
+        try {
+          const ctx = audioCtxRef.current || new (window.AudioContext || window.webkitAudioContext)();
+          audioCtxRef.current = ctx;
+          // Also vibrate on mobile
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = freq; osc.type = "sine";
+            gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.4);
+            osc.start(ctx.currentTime + i * 0.15);
+            osc.stop(ctx.currentTime + i * 0.15 + 0.4);
+          });
+        } catch (e) {}
+      }, []);
+
+      // Send notification when session completes
+      const sendNotification = useCallback((title, body) => {
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(title, { body, icon: "icons/icon-192.png", badge: "icons/icon-192.png" });
+          }
+        } catch (e) {}
+      }, []);
+
+      useEffect(() => {
+        if (isRunning && timeLeft > 0) {
+          intervalRef.current = setInterval(() => {
+            setTimeLeft((t) => {
+              if (t <= 1) {
+                clearInterval(intervalRef.current);
+                setIsRunning(false);
+                playSound();
+                setShowComplete(true);
+                setTimeout(() => setShowComplete(false), 3000);
+                if (mode === "work") {
+                  setSessions((s) => s + 1);
+                  setTotalFocus((f) => f + customDurations.work);
+                  sendNotification("Focus session complete! 🎉", "Great work! Time for a break.");
+                } else {
+                  sendNotification("Break's over! 💪", "Ready to focus again?");
+                }
+                return 0;
+              }
+              if (mode === "work") setTotalFocus((f) => f + 1 / 60);
+              return t - 1;
+            });
+          }, 1000);
+        }
+        return () => clearInterval(intervalRef.current);
+      }, [isRunning, mode, playSound, customDurations.work, timeLeft, sendNotification]);
+
+      // Request notification permission on first interaction
+      const requestNotifPermission = useCallback(() => {
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+      }, []);
+
+      const switchMode = (newMode) => {
+        clearInterval(intervalRef.current);
+        setMode(newMode);
+        setTimeLeft(customDurations[newMode] * 60);
+        setIsRunning(false);
+      };
+
+      const toggleTimer = () => {
+        requestNotifPermission();
+        if (timeLeft === 0) setTimeLeft(duration);
+        setIsRunning(!isRunning);
+      };
+
+      const resetTimer = () => {
+        clearInterval(intervalRef.current);
+        setIsRunning(false);
+        setTimeLeft(duration);
+      };
+
+      const nextSession = () => {
+        if (mode === "work") {
+          switchMode(sessions > 0 && sessions % 4 === 0 ? "longBreak" : "shortBreak");
+        } else {
+          switchMode("work");
+        }
+      };
+
+      // Responsive sizing
+      const timerSize = Math.min(260, window.innerWidth - 80);
+
+      return (
+        <div className="app-container" style={{
+          minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", background: "linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+          color: "#fff", position: "relative", overflow: "hidden", padding: "16px 20px",
+        }}>
+          {/* Particles */}
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+            {Array.from({ length: 10 }).map((_, i) => (
+              <Particle key={i} delay={i * 0.5} color={currentMode.color + "66"} />
+            ))}
+          </div>
+
+          {/* Header */}
+          <div style={{ animation: "slideUp 0.6s ease", marginBottom: 6, textAlign: "center" }}>
+            <h1 style={{
+              fontSize: 38, fontWeight: 800, margin: 0, letterSpacing: -1,
+              background: currentMode.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+              transition: "all 0.5s ease",
+            }}>Pomo</h1>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, margin: "2px 0 0", letterSpacing: 2, textTransform: "uppercase" }}>
+              Focus Timer
+            </p>
+          </div>
+
+          {/* Mode tabs */}
+          <div style={{
+            display: "flex", gap: 4, background: "rgba(255,255,255,0.06)", borderRadius: 16, padding: 4,
+            marginBottom: 24, animation: "slideUp 0.6s 0.1s ease both",
+          }}>
+            {Object.entries(MODES).map(([key, m]) => (
+              <button key={key} onClick={() => switchMode(key)} style={{
+                padding: "9px 16px", border: "none", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                background: mode === key ? currentMode.gradient : "transparent",
+                color: mode === key ? "#fff" : "rgba(255,255,255,0.5)", transition: "all 0.3s ease", outline: "none",
+              }}>{m.label}</button>
+            ))}
+          </div>
+
+          {/* Timer circle */}
+          <div style={{
+            position: "relative", width: timerSize, height: timerSize, marginBottom: 24,
+            animation: isRunning ? "pulse 2s ease-in-out infinite" : "slideUp 0.6s 0.2s ease both",
+          }}>
+            <CircleProgress progress={progress} color={currentMode.color} size={timerSize} />
+            <div style={{
+              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <div style={{
+                fontSize: Math.max(48, timerSize * 0.22), fontWeight: 800, letterSpacing: -2,
+                fontVariantNumeric: "tabular-nums", color: "#fff", lineHeight: 1,
+              }}>{formatTime(timeLeft)}</div>
+              <div style={{
+                fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8, textTransform: "uppercase",
+                letterSpacing: 3, fontWeight: 600,
+              }}>
+                {isRunning ? (mode === "work" ? "Focusing" : "Resting") : timeLeft === 0 ? "Done!" : "Ready"}
+              </div>
+            </div>
+          </div>
+
+          {/* Completion overlay */}
+          {showComplete && (
+            <div style={{
+              position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(0,0,0,0.7)", zIndex: 100, animation: "fadeIn 0.3s ease",
+            }}>
+              <div style={{
+                background: "rgba(255,255,255,0.1)", backdropFilter: "blur(20px)", borderRadius: 24,
+                padding: "36px 44px", textAlign: "center", animation: "celebrate 0.5s ease",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}>
+                <div style={{ fontSize: 52, marginBottom: 10 }}>{mode === "work" ? "🎉" : "💪"}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
+                  {mode === "work" ? "Session Complete!" : "Break's Over!"}
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 14 }}>
+                  {mode === "work" ? "Great focus! Time for a break." : "Ready to crush it again?"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Controls */}
+          <div style={{ display: "flex", gap: 14, marginBottom: 24, animation: "slideUp 0.6s 0.3s ease both" }}>
+            <button onClick={resetTimer} style={{
+              width: 50, height: 50, borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", cursor: "pointer",
+              fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 0.2s ease", outline: "none",
+            }} title="Reset">↺</button>
+            <button onClick={toggleTimer} style={{
+              width: 140, height: 50, borderRadius: 16, border: "none", cursor: "pointer",
+              background: currentMode.gradient, color: "#fff", fontSize: 16, fontWeight: 700,
+              letterSpacing: 1, transition: "all 0.3s ease", outline: "none",
+              boxShadow: `0 8px 32px ${currentMode.color}44`,
+            }}>
+              {isRunning ? "⏸  Pause" : timeLeft === 0 ? "↺  Restart" : "▶  Start"}
+            </button>
+            <button onClick={nextSession} style={{
+              width: 50, height: 50, borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", cursor: "pointer",
+              fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 0.2s ease", outline: "none",
+            }} title="Next">⏭</button>
+          </div>
+
+          {/* Stats */}
+          <div style={{
+            display: "flex", gap: 20, animation: "slideUp 0.6s 0.4s ease both",
+            background: "rgba(255,255,255,0.04)", borderRadius: 20, padding: "16px 28px",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            {[
+              { label: "Sessions", value: sessions, icon: "🔥" },
+              { label: "Focus", value: `${Math.round(totalFocus)}m`, icon: "⏱" },
+              { label: "Streak", value: sessions > 0 ? `${Math.min(sessions, 4)}/4` : "0/4", icon: "⚡" },
+            ].map((stat) => (
+              <div key={stat.label} style={{ textAlign: "center", minWidth: 70 }}>
+                <div style={{ fontSize: 20, marginBottom: 2 }}>{stat.icon}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: currentMode.color, transition: "color 0.5s" }}>{stat.value}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 2, marginTop: 2 }}>{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Settings toggle */}
+          <button onClick={() => setShowSettings(!showSettings)} style={{
+            marginTop: 20, background: "none", border: "none", color: "rgba(255,255,255,0.35)",
+            cursor: "pointer", fontSize: 13, letterSpacing: 1, outline: "none", padding: "8px 16px",
+          }}>⚙ {showSettings ? "Hide" : "Customize"}</button>
+
+          {showSettings && (
+            <div style={{
+              marginTop: 10, background: "rgba(255,255,255,0.04)", borderRadius: 16,
+              padding: "16px 24px", border: "1px solid rgba(255,255,255,0.08)",
+              animation: "slideUp 0.3s ease", display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center",
+            }}>
+              {Object.entries({ work: "Focus", shortBreak: "Short", longBreak: "Long" }).map(([key, label]) => (
+                <div key={key} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 6, letterSpacing: 1 }}>{label}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => {
+                      const v = Math.max(1, customDurations[key] - 5);
+                      setCustomDurations((d) => ({ ...d, [key]: v }));
+                      if (mode === key && !isRunning) setTimeLeft(v * 60);
+                    }} style={{
+                      width: 30, height: 30, borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)",
+                      background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", fontSize: 16, outline: "none",
+                    }}>−</button>
+                    <span style={{ fontSize: 18, fontWeight: 700, minWidth: 36, color: MODES[key].color }}>{customDurations[key]}</span>
+                    <button onClick={() => {
+                      const v = Math.min(90, customDurations[key] + 5);
+                      setCustomDurations((d) => ({ ...d, [key]: v }));
+                      if (mode === key && !isRunning) setTimeLeft(v * 60);
+                    }} style={{
+                      width: 30, height: 30, borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)",
+                      background: "rgba(255,255,255,0.06)", color: "#fff", cursor: "pointer", fontSize: 16, outline: "none",
+                    }}>+</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 3 }}>min</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Quote */}
+          <p style={{
+            marginTop: 20, color: "rgba(255,255,255,0.25)", fontSize: 12, fontStyle: "italic",
+            animation: "fadeIn 1s 0.8s ease both", textAlign: "center",
+          }}>"{quote}"</p>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+  <script>
+    // Register service worker for PWA / offline support
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
