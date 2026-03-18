@@ -1,7 +1,7 @@
 {
-  "appId": "com.yourname.pomo",
+  "appId": "com.nicklews.pomo",
   "appName": "Pomo",
-  "webDir": ".",
+  "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
@@ -24,14 +24,7 @@
       "launchShowDuration": 1500,
       "launchAutoHide": true,
       "backgroundColor": "#1a1a2e",
-      "androidSplashResourceName": "splash",
-      "iosSplashResourceName": "Default",
       "showSpinner": false
-    },
-    "LocalNotifications": {
-      "smallIcon": "ic_stat_icon_config_sample",
-      "iconColor": "#FF6B6B",
-      "sound": "beep.wav"
     }
   }
 }

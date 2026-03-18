@@ -10,16 +10,40 @@ workflows:
       vars:
         BUNDLE_ID: "com.nicklews.pomo"
         APP_NAME: "Pomo"
+        TEAM_ID: "R4KY3NWNX8"
+      groups:
+        - apple-credentials
 
     scripts:
       - name: Install dependencies
         script: |
           npm install
 
+      - name: Prepare web assets
+        script: |
+          mkdir -p www
+          cp index.html www/
+          cp manifest.json www/
+          cp sw.js www/
+          cp -r icons www/ 2>/dev/null || true
+          cp -r ios-assets www/ 2>/dev/null || true
+
       - name: Add iOS platform
         script: |
           npx cap add ios || true
           npx cap sync ios
+
+      - name: Set up keychain and code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files \
+            "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --api-key "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
+          keychain add-certificates
 
       - name: Build iOS app
         script: |
@@ -31,9 +55,38 @@ workflows:
             -sdk iphoneos \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=$TEAM_ID
+
+      - name: Export for App Store
+        script: |
+          cat > /tmp/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>$TEAM_ID</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath $CM_BUILD_DIR/App.xcarchive \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -exportPath $CM_BUILD_DIR/export
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: false
+        submit_to_app_store: false
 
     artifacts:
+      - $CM_BUILD_DIR/export/**/*.ipa
       - $CM_BUILD_DIR/App.xcarchive
