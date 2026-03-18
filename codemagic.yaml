@@ -48,6 +48,14 @@ workflows:
 
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
+            --type IOS_APP_DEVELOPMENT \
+            --create \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
+
+          app-store-connect fetch-signing-files \
+            "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
