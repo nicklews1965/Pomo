@@ -58,6 +58,14 @@ workflows:
           # Apply profiles to the Xcode project
           xcode-project use-profiles --project ios/App/App.xcodeproj
 
+          # Also force the team ID into the project file
+          cd ios/App
+          sed -i '' 's/DEVELOPMENT_TEAM = ""/DEVELOPMENT_TEAM = "R4KY3NWNX8"/g' App.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = R4KY3NWNX8;/g' App.xcodeproj/project.pbxproj
+          # Add team to any target that's missing it
+          sed -i '' '/CODE_SIGN_IDENTITY/a\
+				DEVELOPMENT_TEAM = R4KY3NWNX8;' App.xcodeproj/project.pbxproj 2>/dev/null || true
+
       - name: Build and archive iOS app
         script: |
           xcodebuild \
@@ -68,6 +76,7 @@ workflows:
             -destination 'generic/platform=iOS' \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
+            DEVELOPMENT_TEAM=R4KY3NWNX8 \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
