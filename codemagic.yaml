@@ -56,6 +56,7 @@ workflows:
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive
 
