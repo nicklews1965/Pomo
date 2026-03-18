@@ -6,7 +6,7 @@ workflows:
 
     environment:
       node: latest
-      xcode: latest
+      xcode: 16.2
       vars:
         BUNDLE_ID: "com.nicklews.pomo"
         APP_NAME: "Pomo"
@@ -31,6 +31,13 @@ workflows:
         script: |
           npx cap add ios || true
           npx cap sync ios
+
+      - name: Fix Xcode project platform settings
+        script: |
+          cd ios/App
+          sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
+          # Ensure IPHONEOS_DEPLOYMENT_TARGET is set
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
 
       - name: Set up code signing
         script: |
@@ -58,23 +65,14 @@ workflows:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
-            archive
+            archive \
+            SUPPORTED_PLATFORMS="iphoneos" \
+            SUPPORTS_MACCATALYST=NO
 
       - name: Export for App Store
         script: |
-          xcodebuild \
-            -exportArchive \
-            -archivePath $CM_BUILD_DIR/App.xcarchive \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -exportPath $CM_BUILD_DIR/export \
-          || true
-
-          # Fallback: generate export options from profile
-          if [ ! -d "$CM_BUILD_DIR/export" ]; then
-            xcode-project build-ipa \
-              --archive $CM_BUILD_DIR/App.xcarchive \
-              --export-options-plist /tmp/ExportOptions.plist
-          fi
+          xcode-project build-ipa \
+            --archive $CM_BUILD_DIR/App.xcarchive
 
     publishing:
       app_store_connect:
@@ -85,6 +83,5 @@ workflows:
         submit_to_app_store: false
 
     artifacts:
-      - $CM_BUILD_DIR/export/**/*.ipa
       - $CM_BUILD_DIR/**/*.ipa
       - $CM_BUILD_DIR/App.xcarchive
