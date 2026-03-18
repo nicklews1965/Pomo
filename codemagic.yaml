@@ -32,11 +32,13 @@ workflows:
           npx cap add ios || true
           npx cap sync ios
 
-      - name: Fix Xcode project platform settings
+      - name: Fix Xcode project settings
         script: |
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
+          sed -i '' 's/DEVELOPMENT_TEAM = ""/DEVELOPMENT_TEAM = R4KY3NWNX8/g' App.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = R4KY3NWNX8;/g' App.xcodeproj/project.pbxproj
 
       - name: Set up code signing
         script: |
@@ -44,7 +46,6 @@ workflows:
 
           keychain initialize
 
-          # Fetch App Store distribution certificate and profile
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -54,17 +55,7 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
           keychain add-certificates
-
-          # Apply profiles to the Xcode project
           xcode-project use-profiles --project ios/App/App.xcodeproj
-
-          # Also force the team ID into the project file
-          cd ios/App
-          sed -i '' 's/DEVELOPMENT_TEAM = ""/DEVELOPMENT_TEAM = "R4KY3NWNX8"/g' App.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = R4KY3NWNX8;/g' App.xcodeproj/project.pbxproj
-          # Add team to any target that's missing it
-          sed -i '' '/CODE_SIGN_IDENTITY/a\
-				DEVELOPMENT_TEAM = R4KY3NWNX8;' App.xcodeproj/project.pbxproj 2>/dev/null || true
 
       - name: Build and archive iOS app
         script: |
