@@ -32,10 +32,22 @@ workflows:
           npx cap add ios || true
           npx cap sync ios
 
-      - name: Set up signing key
+      - name: Set up code signing
         script: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8
+          pip3 install --upgrade codemagic-cli-tools
+
+          keychain initialize
+
+          app-store-connect fetch-signing-files \
+            "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
+
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Build and archive iOS app
         script: |
@@ -45,40 +57,23 @@ workflows:
             -configuration Release \
             -sdk iphoneos \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
-            archive \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8 \
-            -authenticationKeyID $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID \
-            -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM=$TEAM_ID \
-            CODE_SIGN_STYLE=Automatic
+            archive
 
       - name: Export for App Store
         script: |
-          cat > /tmp/ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>R4KY3NWNX8</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-          </dict>
-          </plist>
-          EOF
-
           xcodebuild \
             -exportArchive \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             -exportOptionsPlist /tmp/ExportOptions.plist \
             -exportPath $CM_BUILD_DIR/export \
-            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8 \
-            -authenticationKeyID $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID \
-            -allowProvisioningUpdates
+          || true
+
+          # Fallback: generate export options from profile
+          if [ ! -d "$CM_BUILD_DIR/export" ]; then
+            xcode-project build-ipa \
+              --archive $CM_BUILD_DIR/App.xcarchive \
+              --export-options-plist /tmp/ExportOptions.plist
+          fi
 
     publishing:
       app_store_connect:
@@ -90,4 +85,5 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/export/**/*.ipa
+      - $CM_BUILD_DIR/**/*.ipa
       - $CM_BUILD_DIR/App.xcarchive
