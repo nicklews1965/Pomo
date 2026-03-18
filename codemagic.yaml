@@ -46,16 +46,6 @@ workflows:
 
           keychain initialize
 
-          # Fetch development cert so it's in the keychain
-          app-store-connect fetch-signing-files \
-            "$BUNDLE_ID" \
-            --type IOS_APP_DEVELOPMENT \
-            --create \
-            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
-
-          # Fetch distribution cert too
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -65,10 +55,13 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
           keychain add-certificates
+          xcode-project use-profiles --project ios/App/App.xcodeproj
 
-          # Save API key for xcodebuild automatic signing
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          echo "Profiles installed:"
+          ls ~/Library/MobileDevice/Provisioning\ Profiles/ || true
+
+          echo "Project signing settings:"
+          grep -A2 "PROVISIONING_PROFILE\|CODE_SIGN" ios/App/App.xcodeproj/project.pbxproj | head -40 || true
 
       - name: Build and archive iOS app
         script: |
@@ -79,46 +72,16 @@ workflows:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath $CM_BUILD_DIR/App.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            -authenticationKeyID $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID \
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
-            CODE_SIGN_STYLE=Automatic \
             SUPPORTED_PLATFORMS="iphoneos" \
-            SUPPORTS_MACCATALYST=NO
+            SUPPORTS_MACCATALYST=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
-      - name: Export for App Store
+      - name: Export IPA
         script: |
-          cat > /tmp/ExportOptions.plist << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>R4KY3NWNX8</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-            <key>uploadBitcode</key>
-            <false/>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild \
-            -exportArchive \
-            -archivePath $CM_BUILD_DIR/App.xcarchive \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -exportPath $CM_BUILD_DIR/export \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/".appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            -authenticationKeyID $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID
+          xcode-project build-ipa \
+            --archive $CM_BUILD_DIR/App.xcarchive
 
     publishing:
       app_store_connect:
@@ -129,6 +92,5 @@ workflows:
         submit_to_app_store: false
 
     artifacts:
-      - $CM_BUILD_DIR/export/**/*.ipa
       - $CM_BUILD_DIR/**/*.ipa
       - $CM_BUILD_DIR/App.xcarchive
