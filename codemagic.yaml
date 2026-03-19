@@ -44,7 +44,6 @@ workflows:
 
           keychain initialize
 
-          # Generate RSA key for certificate
           openssl genrsa -out /tmp/cert_key.pem 2048
 
           app-store-connect fetch-signing-files \
@@ -57,12 +56,7 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
           keychain add-certificates
-
-          # Get the provisioning profile UUID
-          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
-          echo "Found profile UUID: $PROFILE_UUID"
-          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
+          xcode-project use-profiles --project ios/App/App.xcodeproj
 
       - name: Build and archive iOS app
         script: |
@@ -75,10 +69,6 @@ workflows:
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            "PROVISIONING_PROFILE=$PROFILE_UUID" \
-            "PROVISIONING_PROFILE_SPECIFIER=" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
