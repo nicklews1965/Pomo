@@ -34,12 +34,60 @@ workflows:
 
       - name: Set up code signing
         script: |
+          set -e
           pip3 install --upgrade codemagic-cli-tools
 
           keychain initialize
 
+          # Generate RSA key for certificate
           openssl genrsa -out /tmp/cert_key.pem 2048
+          echo ">>> RSA key generated"
 
+          # Create distribution certificate
+          CERT_INFO=$(app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --certificate-key /tmp/cert_key.pem \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --save 2>&1) || true
+          echo ">>> Certificate creation output: $CERT_INFO"
+
+          # If cert already exists, list and get it
+          echo ">>> Listing existing certificates..."
+          app-store-connect certificates list \
+            --type IOS_DISTRIBUTION \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" || true
+
+          # Add certificates to keychain
+          keychain add-certificates || echo ">>> Warning: keychain add-certificates had issues"
+
+          echo ">>> Certificates in keychain:"
+          security find-identity -v -p codesigning
+
+          # Get the bundle ID resource ID from Apple
+          echo ">>> Getting bundle ID info..."
+          BUNDLE_ID_INFO=$(app-store-connect bundle-ids list \
+            --identifier-strict-match "$BUNDLE_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" 2>&1)
+          echo ">>> Bundle ID info: $BUNDLE_ID_INFO"
+
+          # Try creating the profile
+          echo ">>> Creating App Store provisioning profile..."
+          app-store-connect profiles create \
+            --bundle-id "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key /tmp/cert_key.pem \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --save || echo ">>> Profile creation failed, trying fetch..."
+
+          # Also try fetch-signing-files as backup
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -47,15 +95,16 @@ workflows:
             --certificate-key /tmp/cert_key.pem \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
-            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" || echo ">>> fetch-signing-files also had issues"
 
-          keychain add-certificates
-          xcode-project use-profiles --project ios/App/App.xcodeproj
-
-          echo "=== Certificates ==="
-          security find-identity -v -p codesigning || true
-          echo "=== Profiles ==="
+          # Check what profiles exist
+          echo ">>> Searching for provisioning profiles..."
+          find / -name "*.mobileprovision" 2>/dev/null | head -10
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || true
+
+          # Apply profiles to project
+          xcode-project use-profiles --project ios/App/App.xcodeproj || echo ">>> use-profiles failed"
 
       - name: Fix Xcode project settings
         script: |
@@ -63,12 +112,13 @@ workflows:
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
           sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' App.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = ""/DEVELOPMENT_TEAM = R4KY3NWNX8/g' App.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = R4KY3NWNX8;/g' App.xcodeproj/project.pbxproj
 
-          echo "=== Verify signing settings ==="
-          grep "CODE_SIGN_STYLE" App.xcodeproj/project.pbxproj || true
-          grep "CODE_SIGN_IDENTITY" App.xcodeproj/project.pbxproj || true
+          echo "=== CODE_SIGN settings ==="
+          grep "CODE_SIGN" App.xcodeproj/project.pbxproj | sort -u
+          echo "=== PROVISIONING settings ==="
+          grep "PROVISIONING" App.xcodeproj/project.pbxproj | sort -u
+          echo "=== DEVELOPMENT_TEAM settings ==="
+          grep "DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj | sort -u
 
       - name: Build and archive iOS app
         script: |
