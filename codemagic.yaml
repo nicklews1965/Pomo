@@ -38,44 +38,54 @@ workflows:
 
           keychain initialize
 
-          openssl ecparam -genkey -name prime256v1 -noout -out /tmp/cert_key.pem
+          # Generate RSA private key and read contents
+          openssl genrsa 2048 > /tmp/cert_key.pem 2>/dev/null
+          echo ">>> Key file contents:"
+          head -1 /tmp/cert_key.pem
+          echo ">>> Key file size:"
+          wc -c /tmp/cert_key.pem
+
+          # Pass key as CONTENT not file path
+          CERT_KEY_CONTENT="$(cat /tmp/cert_key.pem)"
 
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key /tmp/cert_key.pem \
+            --certificate-key "$CERT_KEY_CONTENT" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
+          echo ">>> fetch completed"
+
           keychain add-certificates
 
-          # Get profile UUID and save for next step
+          echo ">>> Certs in keychain:"
+          security find-identity -v -p codesigning
+
+          echo ">>> Profiles:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+
+          # Get profile UUID
           PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          echo ">>> Profile path: $PROFILE_PATH"
-          if [ -n "$PROFILE_PATH" ]; then
-            PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(/usr/bin/security cms -D -i "$PROFILE_PATH") 2>/dev/null || basename "$PROFILE_PATH" .mobileprovision)
-            echo ">>> Profile UUID: $PROFILE_UUID"
-            echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
-          else
-            echo ">>> ERROR: No profile found! Listing all mobileprovision files on system:"
-            find / -name "*.mobileprovision" 2>/dev/null | head -10
-            echo ">>> Listing codemagic profiles directory:"
-            find /Users/builder -name "*.mobileprovision" 2>/dev/null | head -10
-            echo ">>> Listing current directory for profiles:"
-            find . -name "*.mobileprovision" 2>/dev/null | head -10
+          if [ -z "$PROFILE_PATH" ]; then
+            echo ">>> No profile found!"
             exit 1
           fi
+          PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
+          echo ">>> Profile UUID: $PROFILE_UUID"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
+
+          xcode-project use-profiles --project ios/App/App.xcodeproj
 
       - name: Fix Xcode project and build
         script: |
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' App.xcodeproj/project.pbxproj
           cd ../..
-
-          echo ">>> Building with PROFILE_UUID=$PROFILE_UUID"
 
           xcodebuild \
             -project ios/App/App.xcodeproj \
