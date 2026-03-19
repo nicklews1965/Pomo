@@ -85,11 +85,12 @@ workflows:
 
           cat ios/App/App/AppDelegate.swift
 
+          # Apply profiles only to App target (not Pods)
+          xcode-project use-profiles --project ios/App/App.xcodeproj
+
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
-          sed -i '' 's/ProvisioningStyle = Automatic/ProvisioningStyle = Manual/g' App.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' App.xcodeproj/project.pbxproj
           cd ../..
 
           xcodebuild \
@@ -101,10 +102,6 @@ workflows:
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
-            CODE_SIGN_STYLE=Manual \
-            "CODE_SIGN_IDENTITY=Apple Distribution" \
-            "PROVISIONING_PROFILE=$PROFILE_UUID" \
-            "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
