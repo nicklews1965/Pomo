@@ -38,14 +38,7 @@ workflows:
 
           keychain initialize
 
-          # Generate RSA private key and read contents
           openssl genrsa 2048 > /tmp/cert_key.pem 2>/dev/null
-          echo ">>> Key file contents:"
-          head -1 /tmp/cert_key.pem
-          echo ">>> Key file size:"
-          wc -c /tmp/cert_key.pem
-
-          # Pass key as CONTENT not file path
           CERT_KEY_CONTENT="$(cat /tmp/cert_key.pem)"
 
           app-store-connect fetch-signing-files \
@@ -57,25 +50,14 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
-          echo ">>> fetch completed"
-
           keychain add-certificates
 
-          echo ">>> Certs in keychain:"
-          security find-identity -v -p codesigning
+          # Copy profiles from where they were saved to the standard location
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          find /Users/builder -name "*.mobileprovision" -exec cp {} ~/Library/MobileDevice/Provisioning\ Profiles/ \; 2>/dev/null
 
-          echo ">>> Profiles:"
+          echo ">>> Profiles in standard location:"
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-
-          # Get profile UUID
-          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          if [ -z "$PROFILE_PATH" ]; then
-            echo ">>> No profile found!"
-            exit 1
-          fi
-          PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
-          echo ">>> Profile UUID: $PROFILE_UUID"
-          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
 
           xcode-project use-profiles --project ios/App/App.xcodeproj
 
@@ -98,7 +80,6 @@ workflows:
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE="$PROFILE_UUID" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
