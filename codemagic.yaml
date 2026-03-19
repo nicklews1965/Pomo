@@ -37,8 +37,6 @@ workflows:
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
-          sed -i '' 's/DEVELOPMENT_TEAM = ""/DEVELOPMENT_TEAM = R4KY3NWNX8/g' App.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = R4KY3NWNX8;/g' App.xcodeproj/project.pbxproj
 
       - name: Set up code signing
         script: |
@@ -55,13 +53,18 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
           keychain add-certificates
-          xcode-project use-profiles --project ios/App/App.xcodeproj
 
-          echo "Profiles installed:"
-          ls ~/Library/MobileDevice/Provisioning\ Profiles/ || true
-
-          echo "Project signing settings:"
-          grep -A2 "PROVISIONING_PROFILE\|CODE_SIGN" ios/App/App.xcodeproj/project.pbxproj | head -40 || true
+          # Get the provisioning profile UUID
+          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
+          if [ -n "$PROFILE_PATH" ]; then
+            PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
+            echo "Found profile UUID: $PROFILE_UUID"
+            echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
+          else
+            echo "ERROR: No provisioning profiles found!"
+            ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "Directory does not exist"
+            exit 1
+          fi
 
       - name: Build and archive iOS app
         script: |
@@ -74,6 +77,10 @@ workflows:
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            "PROVISIONING_PROFILE=$PROFILE_UUID" \
+            "PROVISIONING_PROFILE_SPECIFIER=" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO
