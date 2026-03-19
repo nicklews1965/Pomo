@@ -6,7 +6,7 @@ workflows:
 
     environment:
       node: latest
-      xcode: 16.0
+      xcode: 16.2
       vars:
         BUNDLE_ID: "com.nicklews.pomo"
         APP_NAME: "Pomo"
@@ -82,7 +82,9 @@ workflows:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS=NO \
+            SWIFT_VERSION=5.0
 
       - name: Export IPA
         script: |
