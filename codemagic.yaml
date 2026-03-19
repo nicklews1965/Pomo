@@ -34,10 +34,13 @@ workflows:
 
       - name: Sign, build, and archive
         script: |
+          # Install tools
           pip3 install --upgrade codemagic-cli-tools
 
+          # Initialize keychain
           keychain initialize
 
+          # Generate key and fetch signing files
           openssl genrsa 2048 > /tmp/cert_key.pem 2>/dev/null
           CERT_KEY_CONTENT="$(cat /tmp/cert_key.pem)"
 
@@ -55,17 +58,29 @@ workflows:
           # Copy profiles to standard location
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           find /Users/builder -name "*.mobileprovision" -exec cp {} ~/Library/MobileDevice/Provisioning\ Profiles/ \; 2>/dev/null
+          echo ">>> Profiles copied:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
-          # Get profile UUID
+          # Get profile UUID using grep
           PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(/usr/bin/security cms -D -i "$PROFILE_PATH"))
-          echo ">>> Profile UUID: $PROFILE_UUID"
+          echo ">>> Profile path: $PROFILE_PATH"
 
-          # Fix Xcode project
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | grep -A1 "<key>UUID</key>" | grep "<string>" | sed 's/.*<string>//' | sed 's/<\/string>.*//')
+          echo ">>> Profile UUID from grep: $PROFILE_UUID"
+
+          # Fallback: try basename
+          if [ -z "$PROFILE_UUID" ]; then
+            PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
+            echo ">>> Fallback UUID from filename: $PROFILE_UUID"
+          fi
+
+          # Fix project settings
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
           cd ../..
+
+          echo ">>> Building with PROVISIONING_PROFILE=$PROFILE_UUID"
 
           # Build
           xcodebuild \
@@ -78,8 +93,8 @@ workflows:
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE="$PROFILE_UUID" \
+            "CODE_SIGN_IDENTITY=Apple Distribution" \
+            "PROVISIONING_PROFILE=$PROFILE_UUID" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
