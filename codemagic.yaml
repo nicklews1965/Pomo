@@ -34,55 +34,51 @@ workflows:
 
       - name: Sign, build, and archive
         script: |
-          # Install tools
+          set -x
+
           pip3 install --upgrade codemagic-cli-tools
 
-          # Initialize keychain
           keychain initialize
 
-          # Generate key and fetch signing files
           openssl genrsa 2048 > /tmp/cert_key.pem 2>/dev/null
           CERT_KEY_CONTENT="$(cat /tmp/cert_key.pem)"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
 
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
             --certificate-key "$CERT_KEY_CONTENT" \
+            --profiles-dir ~/Library/MobileDevice/Provisioning\ Profiles \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
 
           keychain add-certificates
 
-          # Copy profiles to standard location
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          find /Users/builder -name "*.mobileprovision" -exec cp {} ~/Library/MobileDevice/Provisioning\ Profiles/ \; 2>/dev/null
-          echo ">>> Profiles copied:"
+          # Also copy any profiles that ended up elsewhere
+          find /Users/builder -name "*.mobileprovision" -exec cp {} ~/Library/MobileDevice/Provisioning\ Profiles/ \; 2>/dev/null || true
+
+          echo ">>> ALL profiles on system:"
+          find /Users/builder -name "*.mobileprovision" 2>/dev/null
+
+          echo ">>> Profiles in standard location:"
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
-          # Get profile UUID using grep
-          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          echo ">>> Profile path: $PROFILE_PATH"
+          # Apply profiles to project
+          xcode-project use-profiles --project ios/App/App.xcodeproj
 
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | grep -A1 "<key>UUID</key>" | grep "<string>" | sed 's/.*<string>//' | sed 's/<\/string>.*//')
-          echo ">>> Profile UUID from grep: $PROFILE_UUID"
+          echo ">>> Project signing settings after use-profiles:"
+          grep -E "CODE_SIGN|PROVISIONING|DEVELOPMENT_TEAM" ios/App/App.xcodeproj/project.pbxproj | sort -u
 
-          # Fallback: try basename
-          if [ -z "$PROFILE_UUID" ]; then
-            PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
-            echo ">>> Fallback UUID from filename: $PROFILE_UUID"
-          fi
-
-          # Fix project settings
+          # Fix platform settings
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
           cd ../..
 
-          echo ">>> Building with PROVISIONING_PROFILE=$PROFILE_UUID"
-
-          # Build
+          # Build without overriding signing settings - let use-profiles handle it
           xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
@@ -92,9 +88,6 @@ workflows:
             -archivePath $CM_BUILD_DIR/App.xcarchive \
             archive \
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
-            CODE_SIGN_STYLE=Manual \
-            "CODE_SIGN_IDENTITY=Apple Distribution" \
-            "PROVISIONING_PROFILE=$PROFILE_UUID" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
