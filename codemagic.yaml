@@ -31,6 +31,7 @@ workflows:
         script: |
           npx cap add ios || true
           npx cap sync ios
+          cd ios/App && pod install --repo-update && cd ../..
 
       - name: Sign, build, and archive
         script: |
@@ -92,7 +93,7 @@ workflows:
           cd ../..
 
           xcodebuild \
-            -project ios/App/App.xcodeproj \
+            -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
