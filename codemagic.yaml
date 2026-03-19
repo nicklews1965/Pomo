@@ -44,10 +44,14 @@ workflows:
 
           keychain initialize
 
+          # Generate RSA key for certificate
+          openssl genrsa -out /tmp/cert_key.pem 2048
+
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
+            --certificate-key /tmp/cert_key.pem \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY"
@@ -56,15 +60,9 @@ workflows:
 
           # Get the provisioning profile UUID
           PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          if [ -n "$PROFILE_PATH" ]; then
-            PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
-            echo "Found profile UUID: $PROFILE_UUID"
-            echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
-          else
-            echo "ERROR: No provisioning profiles found!"
-            ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "Directory does not exist"
-            exit 1
-          fi
+          PROFILE_UUID=$(basename "$PROFILE_PATH" .mobileprovision)
+          echo "Found profile UUID: $PROFILE_UUID"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
 
       - name: Build and archive iOS app
         script: |
