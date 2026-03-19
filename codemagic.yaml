@@ -112,7 +112,7 @@ workflows:
       - name: Export IPA
         script: |
           xcode-project build-ipa \
-            --archive $CM_BUILD_DIR/App.xcarchive
+            --archive-directory $CM_BUILD_DIR/App.xcarchive
 
     publishing:
       app_store_connect:
