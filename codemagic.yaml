@@ -59,15 +59,20 @@ workflows:
           echo ">>> Profiles in standard location:"
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
-          xcode-project use-profiles --project ios/App/App.xcodeproj
+          # Get the profile UUID
+          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(/usr/bin/security cms -D -i "$PROFILE_PATH"))
+          echo ">>> PROFILE_UUID=$PROFILE_UUID"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
 
       - name: Fix Xcode project and build
         script: |
           cd ios/App
           sed -i '' 's/SUPPORTED_PLATFORMS = ".*"/SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"/g' App.xcodeproj/project.pbxproj
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' App.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' App.xcodeproj/project.pbxproj
           cd ../..
+
+          echo ">>> Building with profile: $PROFILE_UUID"
 
           xcodebuild \
             -project ios/App/App.xcodeproj \
@@ -80,6 +85,7 @@ workflows:
             DEVELOPMENT_TEAM=R4KY3NWNX8 \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE="$PROFILE_UUID" \
             SUPPORTED_PLATFORMS="iphoneos" \
             SUPPORTS_MACCATALYST=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
