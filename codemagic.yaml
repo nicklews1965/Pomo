@@ -6,7 +6,7 @@ workflows:
 
     environment:
       node: latest
-      xcode: 15.4
+      xcode: 16.0
       vars:
         BUNDLE_ID: "com.nicklews.pomo"
         APP_NAME: "Pomo"
