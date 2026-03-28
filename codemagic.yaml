@@ -33,6 +33,12 @@ workflows:
           npx cap sync ios
           cd ios/App && pod install --repo-update && cd ../..
 
+      - name: Increment build number
+        script: |
+          cd ios/App
+          agvtool new-version -all $PROJECT_BUILD_NUMBER
+          cd ../..
+
       - name: Sign, build, and archive
         script: |
           set -e
