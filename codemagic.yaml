@@ -33,6 +33,31 @@ workflows:
           npx cap sync ios
           cd ios/App && pod install --repo-update && cd ../..
 
+      - name: Replace app icon in asset catalog
+        script: |
+          ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          rm -rf "$ICON_DIR"
+          mkdir -p "$ICON_DIR"
+          cp icons/icon-1024.png "$ICON_DIR/AppIcon-1024.png"
+          cat > "$ICON_DIR/Contents.json" << 'ICONEOF'
+          {
+            "images": [
+              {
+                "filename": "AppIcon-1024.png",
+                "idiom": "universal",
+                "platform": "ios",
+                "size": "1024x1024"
+              }
+            ],
+            "info": {
+              "author": "xcode",
+              "version": 1
+            }
+          }
+          ICONEOF
+          echo "App icon replaced successfully"
+          ls -la "$ICON_DIR"
+
       - name: Increment build number
         script: |
           cd ios/App
