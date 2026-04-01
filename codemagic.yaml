@@ -39,6 +39,7 @@ workflows:
           rm -rf "$ICON_DIR"
           mkdir -p "$ICON_DIR"
           cp icons/icon-1024.png "$ICON_DIR/AppIcon-1024.png"
+          sips -s hasAlpha false "$ICON_DIR/AppIcon-1024.png" --out "$ICON_DIR/AppIcon-1024.png"
           cat > "$ICON_DIR/Contents.json" << 'ICONEOF'
           {
             "images": [
